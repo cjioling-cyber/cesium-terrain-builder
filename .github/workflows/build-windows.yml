@@ -21,7 +21,7 @@ jobs:
         run: |
           git clone https://github.com/microsoft/vcpkg.git vcpkg
           cd vcpkg
-          git checkout f8ce3b7a0e2957cf9b4231c1c0cce5e91e6ee42d
+          git checkout 8f54ef5453e7e76ff01e15988bf243e7247c5eb5
 
       - name: Install dependencies via vcpkg manifest
         uses: lukka/run-vcpkg@v11
