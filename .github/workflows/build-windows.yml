@@ -4,7 +4,7 @@ on:
   workflow_dispatch:   # 手动触发
   push:
     tags:
-      - 'v*'           # push tag（如 v1.0.0）时自动触发
+      - 'v*'           # push tag 自动触发
 
 jobs:
   build-windows:
@@ -12,28 +12,39 @@ jobs:
     timeout-minutes: 360
 
     steps:
+      # 1. Checkout 代码
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Setup vcpkg & install GDAL
+      # 2. Setup vcpkg（使用 Manifest 模式自动安装依赖）
+      - name: Checkout vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          cd vcpkg
+          git checkout f8ce3b7a0e2957cf9b4231c1c0cce5e91e6ee42d
+
+      - name: Install dependencies via vcpkg manifest
         uses: lukka/run-vcpkg@v11
         with:
-          # 指定要安装的包（可根据需要增删特性）
-          vcpkgArguments: install gdal:x64-windows
           vcpkgDirectory: ${{ github.workspace }}/vcpkg
+          vcpkgArguments: install
 
+      # 3. Configure CMake
       - name: Configure CMake (Generate)
         shell: pwsh
         run: |
           cmake -S . -B build -G "Ninja" `
             -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_MANIFEST_MODE=ON `
             -DCMAKE_BUILD_TYPE=Release
 
+      # 4. Build CTB
       - name: Build (CMake)
         shell: pwsh
         run: |
           cmake --build build --config Release
 
+      # 5. 收集 exe + DLL
       - name: Collect exe + dependent DLLs
         shell: pwsh
         run: |
@@ -42,14 +53,16 @@ jobs:
           $vcpkgBin = "${{ github.workspace }}\vcpkg\installed\x64-windows\bin"
           if (Test-Path $vcpkgBin) { Copy-Item -Path "$vcpkgBin\*.dll" -Destination out -ErrorAction SilentlyContinue }
 
-      - name: Upload build artifacts
+      # 6. 上传 artifact（供下载）
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ctb-windows-exes
           path: out
           retention-days: 7
 
-      - name: Create GitHub Release & attach assets (only on tag)
+      # 7. 可选：自动创建 Release（触发 tag 时）
+      - name: Create GitHub Release & attach assets
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
